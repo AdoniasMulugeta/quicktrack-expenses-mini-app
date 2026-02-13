@@ -1,6 +1,8 @@
 // app.js — Core logic + Telegram SDK integration
 
 let tg = null;
+let currentGroupId = null;
+let currentGroupData = null;
 
 async function init() {
   // Telegram SDK
@@ -53,6 +55,9 @@ async function init() {
   window.addEventListener('online', () => showOfflineBanner(false));
   window.addEventListener('offline', () => showOfflineBanner(true));
   if (!navigator.onLine) showOfflineBanner(true);
+
+  // Handle deep link for group join
+  handleDeepLink();
 }
 
 async function refreshList() {
@@ -65,11 +70,23 @@ function navigateBack() {
   const addView = document.getElementById('add-view');
   const detailView = document.getElementById('detail-view');
   const summaryView = document.getElementById('summary-view');
+  const createGroupView = document.getElementById('create-group-view');
+  const groupDetailView = document.getElementById('group-detail-view');
+  const addGroupExpenseView = document.getElementById('add-group-expense-view');
+  const joinGroupView = document.getElementById('join-group-view');
 
-  if (!addView.classList.contains('hidden') || !detailView.classList.contains('hidden')) {
+  if (!addGroupExpenseView.classList.contains('hidden')) {
+    showView('group-detail');
+  } else if (!groupDetailView.classList.contains('hidden')) {
+    currentGroupId = null;
+    currentGroupData = null;
+    showView('groups');
+  } else if (!createGroupView.classList.contains('hidden') || !joinGroupView.classList.contains('hidden')) {
+    showView('groups');
+  } else if (!addView.classList.contains('hidden') || !detailView.classList.contains('hidden')) {
     showView('list');
     resetForm();
-  } else if (!summaryView.classList.contains('hidden')) {
+  } else if (!summaryView.classList.contains('hidden') || !document.getElementById('groups-view').classList.contains('hidden')) {
     showView('list');
   } else {
     tg?.close();
@@ -83,6 +100,9 @@ function setupEventListeners() {
       showView(btn.dataset.view);
       if (btn.dataset.view === 'summary') {
         renderSummary(allExpenses);
+      }
+      if (btn.dataset.view === 'groups') {
+        loadGroups();
       }
     });
   });
@@ -114,10 +134,10 @@ function setupEventListeners() {
     });
   });
 
-  // Category picker in form
-  document.querySelectorAll('.category-option').forEach(opt => {
+  // Category picker in personal expense form
+  document.querySelectorAll('#add-view .category-option').forEach(opt => {
     opt.addEventListener('click', () => {
-      document.querySelectorAll('.category-option').forEach(o => o.classList.remove('selected'));
+      document.querySelectorAll('#add-view .category-option').forEach(o => o.classList.remove('selected'));
       opt.classList.add('selected');
       document.getElementById('input-category').value = opt.dataset.cat;
     });
@@ -136,8 +156,7 @@ function setupEventListeners() {
     if (!expense) return;
     resetForm();
     populateEditForm(expense);
-    // Select category in grid
-    document.querySelectorAll('.category-option').forEach(o => {
+    document.querySelectorAll('#add-view .category-option').forEach(o => {
       o.classList.toggle('selected', o.dataset.cat === expense.category);
     });
     showView('add');
@@ -164,6 +183,44 @@ function setupEventListeners() {
       showView('add');
     });
   }
+
+  // --- Group event listeners ---
+
+  // Create group button
+  document.getElementById('btn-create-group').addEventListener('click', () => {
+    document.getElementById('input-group-name').value = '';
+    showView('create-group');
+  });
+
+  // Save new group
+  document.getElementById('btn-save-group').addEventListener('click', handleCreateGroup);
+
+  // Share invite link
+  document.getElementById('btn-share-invite').addEventListener('click', handleShareInvite);
+
+  // Add group expense button
+  document.getElementById('btn-add-group-expense').addEventListener('click', () => {
+    resetGroupExpenseForm();
+    showView('add-group-expense');
+  });
+
+  // Group expense category picker
+  document.querySelectorAll('#group-category-grid .category-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      document.querySelectorAll('#group-category-grid .category-option').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      document.getElementById('input-group-category').value = opt.dataset.cat;
+    });
+  });
+
+  // Save group expense
+  document.getElementById('btn-save-group-expense').addEventListener('click', handleSaveGroupExpense);
+
+  // Delete group
+  document.getElementById('btn-delete-group').addEventListener('click', handleDeleteGroup);
+
+  // Join group
+  document.getElementById('btn-confirm-join').addEventListener('click', handleConfirmJoin);
 }
 
 async function handleSave() {
@@ -226,6 +283,269 @@ function haptic(type) {
     hf.notificationOccurred('error');
   } else {
     hf.impactOccurred('light');
+  }
+}
+
+// --- Group API client ---
+
+function getAuthHeader() {
+  return tg?.initData || '';
+}
+
+async function apiCall(url, options = {}) {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': getAuthHeader(),
+      ...(options.headers || {})
+    }
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'API error');
+  }
+  return data;
+}
+
+async function fetchGroups() {
+  return apiCall('/api/groups');
+}
+
+async function createGroup(name) {
+  return apiCall('/api/groups', {
+    method: 'POST',
+    body: JSON.stringify({ name })
+  });
+}
+
+async function fetchGroupDetail(groupId) {
+  return apiCall(`/api/groups/${encodeURIComponent(groupId)}`);
+}
+
+async function deleteGroupApi(groupId) {
+  return apiCall(`/api/groups/${encodeURIComponent(groupId)}`, { method: 'DELETE' });
+}
+
+async function addGroupExpense(groupId, expense) {
+  return apiCall(`/api/groups/${encodeURIComponent(groupId)}/expenses`, {
+    method: 'POST',
+    body: JSON.stringify(expense)
+  });
+}
+
+async function joinGroupApi(groupId, inviteCode) {
+  return apiCall(`/api/groups/${encodeURIComponent(groupId)}/join?invite=${encodeURIComponent(inviteCode)}`, {
+    method: 'POST'
+  });
+}
+
+// --- Group handlers ---
+
+async function loadGroups() {
+  showGroupLoading('group-list');
+  document.getElementById('groups-empty').classList.add('hidden');
+  try {
+    const data = await fetchGroups();
+    renderGroupList(data.groups || []);
+  } catch (e) {
+    console.error('Failed to load groups:', e);
+    document.getElementById('group-list').innerHTML =
+      '<div class="loading">Failed to load groups</div>';
+  }
+}
+
+async function openGroupDetail(groupId) {
+  currentGroupId = groupId;
+  showView('group-detail');
+  showGroupLoading('group-expense-list');
+  document.getElementById('group-expenses-empty').classList.add('hidden');
+  document.getElementById('group-detail-name').textContent = 'Loading...';
+  document.getElementById('group-members').innerHTML = '';
+
+  try {
+    const data = await fetchGroupDetail(groupId);
+    currentGroupData = data.group;
+    renderGroupDetail(data.group, data.members, data.expenses);
+  } catch (e) {
+    console.error('Failed to load group:', e);
+    document.getElementById('group-detail-name').textContent = 'Error';
+    document.getElementById('group-expense-list').innerHTML =
+      '<div class="loading">Failed to load group</div>';
+  }
+}
+
+async function handleCreateGroup() {
+  const nameInput = document.getElementById('input-group-name');
+  const name = nameInput.value.trim();
+
+  if (!name) {
+    nameInput.style.borderColor = 'var(--destructive)';
+    nameInput.focus();
+    haptic('error');
+    setTimeout(() => { nameInput.style.borderColor = ''; }, 1500);
+    return;
+  }
+
+  try {
+    await createGroup(name);
+    haptic('success');
+    showView('groups');
+    loadGroups();
+  } catch (e) {
+    console.error('Create group failed:', e);
+    haptic('error');
+  }
+}
+
+function handleShareInvite() {
+  if (!currentGroupData) return;
+
+  const botUsername = tg?.initDataUnsafe?.bot?.username;
+  const inviteCode = currentGroupData.inviteCode;
+  const groupId = currentGroupData.id;
+
+  // Build the invite deep link
+  const link = botUsername
+    ? `https://t.me/${botUsername}?startapp=join_${groupId}_${inviteCode}`
+    : `${window.location.origin}?join=${groupId}_${inviteCode}`;
+
+  // Try native share, fall back to clipboard
+  if (navigator.share) {
+    navigator.share({
+      title: `Join "${currentGroupData.name}" on QuickTrack`,
+      text: `Join my expense group "${currentGroupData.name}"`,
+      url: link
+    }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(link).then(() => {
+      haptic('success');
+      const btn = document.getElementById('btn-share-invite');
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    }).catch(() => {});
+  }
+}
+
+async function handleSaveGroupExpense() {
+  if (!currentGroupId) return;
+
+  const amountEl = document.getElementById('input-group-amount');
+  const amount = parseFloat(amountEl.value);
+
+  if (!amount || amount <= 0) {
+    amountEl.style.borderColor = 'var(--destructive)';
+    amountEl.focus();
+    haptic('error');
+    setTimeout(() => { amountEl.style.borderColor = ''; }, 1500);
+    return;
+  }
+
+  const category = document.getElementById('input-group-category').value;
+  const note = document.getElementById('input-group-note').value.trim();
+
+  try {
+    await addGroupExpense(currentGroupId, { amount, category, note });
+    haptic('success');
+    resetGroupExpenseForm();
+    // Refresh group detail
+    openGroupDetail(currentGroupId);
+  } catch (e) {
+    console.error('Add group expense failed:', e);
+    haptic('error');
+  }
+}
+
+function resetGroupExpenseForm() {
+  document.getElementById('input-group-amount').value = '';
+  document.getElementById('input-group-category').value = 'food';
+  document.getElementById('input-group-note').value = '';
+  document.getElementById('group-form-currency').textContent = currentCurrency;
+  document.getElementById('group-expense-form-title').textContent = 'Add Group Expense';
+  document.querySelectorAll('#group-category-grid .category-option').forEach(o => {
+    o.classList.toggle('selected', o.dataset.cat === 'food');
+  });
+}
+
+async function handleDeleteGroup() {
+  if (!currentGroupId) return;
+  try {
+    await deleteGroupApi(currentGroupId);
+    haptic('success');
+    currentGroupId = null;
+    currentGroupData = null;
+    showView('groups');
+    loadGroups();
+  } catch (e) {
+    console.error('Delete group failed:', e);
+    haptic('error');
+  }
+}
+
+// --- Deep link handling ---
+
+let pendingJoin = null;
+
+function handleDeepLink() {
+  // Telegram deep link: startapp=join_{groupId}_{inviteCode}
+  const startParam = tg?.initDataUnsafe?.start_param;
+  if (startParam && startParam.startsWith('join_')) {
+    const parts = startParam.slice(5).split('_');
+    if (parts.length >= 2) {
+      const groupId = parts[0];
+      const inviteCode = parts.slice(1).join('_');
+      pendingJoin = { groupId, inviteCode };
+      showView('join-group');
+      document.getElementById('join-group-title').textContent = 'Join Group';
+      document.getElementById('join-group-desc').textContent = 'You\'ve been invited to join a group';
+      return;
+    }
+  }
+
+  // URL param fallback: ?join={groupId}_{inviteCode}
+  const urlParams = new URLSearchParams(window.location.search);
+  const joinParam = urlParams.get('join');
+  if (joinParam) {
+    const parts = joinParam.split('_');
+    if (parts.length >= 2) {
+      const groupId = parts[0];
+      const inviteCode = parts.slice(1).join('_');
+      pendingJoin = { groupId, inviteCode };
+      showView('join-group');
+      return;
+    }
+  }
+}
+
+async function handleConfirmJoin() {
+  if (!pendingJoin) return;
+
+  const btn = document.getElementById('btn-confirm-join');
+  btn.textContent = 'Joining...';
+  btn.disabled = true;
+
+  try {
+    const data = await joinGroupApi(pendingJoin.groupId, pendingJoin.inviteCode);
+    haptic('success');
+    pendingJoin = null;
+    // Clear URL params
+    if (window.history.replaceState) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    // Navigate to the group
+    currentGroupId = data.group.id;
+    showView('groups');
+    loadGroups();
+    // Then open the group detail
+    setTimeout(() => openGroupDetail(data.group.id), 500);
+  } catch (e) {
+    console.error('Join failed:', e);
+    haptic('error');
+    document.getElementById('join-group-desc').textContent = 'Failed to join group. The invite may be invalid.';
+  } finally {
+    btn.textContent = 'Join Group';
+    btn.disabled = false;
   }
 }
 

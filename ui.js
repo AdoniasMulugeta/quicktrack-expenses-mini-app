@@ -229,19 +229,31 @@ function showView(name) {
   const view = document.getElementById(`${name}-view`);
   if (view) view.classList.remove('hidden');
 
-  // Tab active state
+  // Tab active state — map sub-views to their parent tab
+  const tabMap = {
+    'list': 'list', 'add': 'list', 'detail': 'list',
+    'summary': 'summary',
+    'groups': 'groups', 'create-group': 'groups',
+    'group-detail': 'groups', 'add-group-expense': 'groups',
+    'join-group': 'groups'
+  };
+  const activeTab = tabMap[name] || name;
   document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.view === name);
+    btn.classList.toggle('active', btn.dataset.view === activeTab);
   });
 
-  // Telegram BackButton
+  // Telegram BackButton + MainButton
   const tg = window.Telegram?.WebApp;
   if (name === 'list') {
     tg?.BackButton?.hide();
+    tg?.MainButton?.setText('Add Expense');
     tg?.MainButton?.show();
-  } else if (name === 'add' || name === 'detail' || name === 'summary') {
+  } else if (name === 'groups') {
+    tg?.BackButton?.hide();
+    tg?.MainButton?.hide();
+  } else {
     tg?.BackButton?.show();
-    if (name !== 'add') tg?.MainButton?.hide();
+    tg?.MainButton?.hide();
   }
 }
 
@@ -274,4 +286,99 @@ function escapeHtml(str) {
   const d = document.createElement('div');
   d.textContent = str;
   return d.innerHTML;
+}
+
+// --- Group UI ---
+
+function renderGroupList(groups) {
+  const list = document.getElementById('group-list');
+  const empty = document.getElementById('groups-empty');
+
+  if (!groups || groups.length === 0) {
+    list.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+
+  empty.classList.add('hidden');
+  list.innerHTML = groups.map(g => `
+    <div class="group-card" data-group-id="${escapeHtml(g.id)}">
+      <div class="group-avatar">${escapeHtml(g.name.charAt(0).toUpperCase())}</div>
+      <div class="group-info">
+        <div class="group-name">${escapeHtml(g.name)}</div>
+        <div class="group-meta">Created by ${escapeHtml(g.createdByName || 'Unknown')}</div>
+      </div>
+      <span class="group-arrow">›</span>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.group-card').forEach(card => {
+    card.addEventListener('click', () => {
+      openGroupDetail(card.dataset.groupId);
+    });
+  });
+}
+
+function renderGroupDetail(group, members, expenses) {
+  document.getElementById('group-detail-name').textContent = group.name;
+
+  // Members
+  const membersEl = document.getElementById('group-members');
+  membersEl.innerHTML = (members || []).map(m => `
+    <div class="member-chip">
+      <div class="member-avatar">${escapeHtml((m.name || '?').charAt(0).toUpperCase())}</div>
+      <span>${escapeHtml(m.name || 'Unknown')}</span>
+    </div>
+  `).join('');
+
+  // Show delete button only for creator
+  const deleteBtn = document.getElementById('btn-delete-group');
+  const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  if (tgUser && String(tgUser.id) === group.createdBy) {
+    deleteBtn.classList.remove('hidden');
+  } else {
+    deleteBtn.classList.add('hidden');
+  }
+
+  renderGroupExpenses(expenses);
+}
+
+function renderGroupExpenses(expenses) {
+  const list = document.getElementById('group-expense-list');
+  const empty = document.getElementById('group-expenses-empty');
+
+  if (!expenses || expenses.length === 0) {
+    list.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+
+  empty.classList.add('hidden');
+  list.innerHTML = expenses.map(e => {
+    const cat = CATEGORIES[e.category] || CATEGORIES.other;
+    return `
+      <div class="group-expense-card" data-expense-id="${escapeHtml(e.id)}">
+        <div class="expense-left">
+          <span class="expense-icon">${cat.icon}</span>
+          <div class="expense-info">
+            <div class="expense-cat-row">
+              <span class="cat-badge" style="background:${cat.color}20;color:${cat.color}">${cat.label}</span>
+              ${e.note ? `<span class="expense-note">${escapeHtml(e.note)}</span>` : ''}
+            </div>
+            <span class="expense-added-by">${escapeHtml(e.addedByName || 'Unknown')}</span>
+            <span class="expense-date">${formatDate(e.timestamp)}</span>
+          </div>
+        </div>
+        <div class="expense-right">
+          <span class="expense-amount">-${formatAmount(e.amount)}</span>
+          <span class="expense-currency">${currentCurrency}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function showGroupLoading(containerId) {
+  const el = document.getElementById(containerId);
+  if (el) el.innerHTML = '<div class="loading">Loading...</div>';
 }

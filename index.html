@@ -24,6 +24,7 @@
   <nav class="tab-bar">
     <button class="tab-btn active" data-view="list">Expenses</button>
     <button class="tab-btn" data-view="summary">Summary</button>
+    <button class="tab-btn" data-view="groups">Groups</button>
   </nav>
 
   <!-- LIST VIEW -->
@@ -150,6 +151,117 @@
       </div>
 
       <div id="category-breakdown"></div>
+    </div>
+  </div>
+
+  <!-- GROUPS LIST VIEW -->
+  <div class="view hidden" id="groups-view">
+    <div class="groups-view">
+      <div class="groups-header">
+        <h2 class="form-title">Groups</h2>
+        <button class="btn-icon" id="btn-create-group" title="Create group">+</button>
+      </div>
+      <div id="group-list" class="group-list"></div>
+      <div class="empty-state hidden" id="groups-empty">
+        <div class="empty-icon">👥</div>
+        <p>No groups yet</p>
+        <p class="empty-hint">Create a group to share expenses with friends</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE GROUP VIEW -->
+  <div class="view hidden" id="create-group-view">
+    <div class="form-view">
+      <h2 class="form-title">Create Group</h2>
+      <div class="form-group">
+        <label class="form-label">Group Name</label>
+        <input type="text" class="form-input" id="input-group-name"
+               placeholder="e.g., Apartment, Trip to Paris" maxlength="50">
+      </div>
+      <button class="btn btn-primary" id="btn-save-group">Create</button>
+    </div>
+  </div>
+
+  <!-- GROUP DETAIL VIEW -->
+  <div class="view hidden" id="group-detail-view">
+    <div class="group-detail">
+      <div class="group-detail-header">
+        <h2 class="form-title" id="group-detail-name">Group</h2>
+        <button class="btn-icon btn-share" id="btn-share-invite" title="Share invite link">🔗</button>
+      </div>
+
+      <div class="group-members" id="group-members"></div>
+
+      <div class="group-expenses-header">
+        <span class="form-label">Expenses</span>
+        <button class="btn-icon btn-add-small" id="btn-add-group-expense">+</button>
+      </div>
+      <div class="expense-list" id="group-expense-list"></div>
+      <div class="empty-state hidden" id="group-expenses-empty">
+        <div class="empty-icon">💰</div>
+        <p>No expenses in this group</p>
+        <p class="empty-hint">Tap + to add the first expense</p>
+      </div>
+
+      <button class="btn btn-danger hidden" id="btn-delete-group">Delete Group</button>
+    </div>
+  </div>
+
+  <!-- ADD GROUP EXPENSE VIEW -->
+  <div class="view hidden" id="add-group-expense-view">
+    <div class="form-view">
+      <h2 class="form-title" id="group-expense-form-title">Add Group Expense</h2>
+
+      <div class="form-group">
+        <label class="form-label">Amount</label>
+        <div class="amount-input-wrap">
+          <input type="number" class="form-input" id="input-group-amount"
+                 placeholder="0.00" inputmode="decimal" step="0.01" min="0">
+          <span class="currency-label" id="group-form-currency">ETB</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <input type="hidden" id="input-group-category" value="food">
+        <div class="category-grid" id="group-category-grid">
+          <div class="category-option selected" data-cat="food">
+            <span class="cat-icon">🍔</span>
+            <span class="cat-name">Food</span>
+          </div>
+          <div class="category-option" data-cat="transport">
+            <span class="cat-icon">🚌</span>
+            <span class="cat-name">Transport</span>
+          </div>
+          <div class="category-option" data-cat="bills">
+            <span class="cat-icon">📄</span>
+            <span class="cat-name">Bills</span>
+          </div>
+          <div class="category-option" data-cat="other">
+            <span class="cat-icon">📦</span>
+            <span class="cat-name">Other</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Note (optional)</label>
+        <input type="text" class="form-input" id="input-group-note"
+               placeholder="e.g., Dinner together" maxlength="100">
+      </div>
+
+      <button class="btn btn-primary" id="btn-save-group-expense">Save</button>
+    </div>
+  </div>
+
+  <!-- JOIN GROUP VIEW -->
+  <div class="view hidden" id="join-group-view">
+    <div class="form-view" style="text-align:center;padding-top:40px">
+      <div style="font-size:48px;margin-bottom:16px">👥</div>
+      <h2 class="form-title" id="join-group-title">Join Group</h2>
+      <p class="empty-hint" id="join-group-desc" style="margin-bottom:20px">You've been invited to join a group</p>
+      <button class="btn btn-primary" id="btn-confirm-join">Join Group</button>
     </div>
   </div>
 
