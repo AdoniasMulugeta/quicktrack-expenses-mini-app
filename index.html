@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>QuickTrack Expenses</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="app-header">
+    <span class="app-title">QuickTrack</span>
+    <button class="currency-toggle" id="currency-btn">ETB</button>
+  </header>
+
+  <!-- Offline banner -->
+  <div class="offline-banner hidden" id="offline-banner">
+    Offline — data saved locally, syncs later
+  </div>
+
+  <!-- Tabs -->
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-view="list">Expenses</button>
+    <button class="tab-btn" data-view="summary">Summary</button>
+  </nav>
+
+  <!-- LIST VIEW -->
+  <div class="view" id="list-view">
+    <!-- Search -->
+    <div class="search-bar">
+      <input type="search" class="search-input" id="search-input" placeholder="Search expenses...">
+    </div>
+
+    <!-- Filter chips -->
+    <div class="filter-chips">
+      <button class="filter-chip" data-cat="food">🍔 Food</button>
+      <button class="filter-chip" data-cat="transport">🚌 Transport</button>
+      <button class="filter-chip" data-cat="bills">📄 Bills</button>
+      <button class="filter-chip" data-cat="other">📦 Other</button>
+    </div>
+
+    <!-- Expense list -->
+    <div class="expense-list" id="expense-list"></div>
+
+    <!-- Empty state -->
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">📊</div>
+      <p>No expenses yet</p>
+      <p class="empty-hint">Tap "Add Expense" to start tracking</p>
+    </div>
+  </div>
+
+  <!-- ADD/EDIT VIEW -->
+  <div class="view hidden" id="add-view">
+    <div class="form-view">
+      <h2 class="form-title" id="form-title">Add Expense</h2>
+
+      <div class="form-group">
+        <label class="form-label">Amount</label>
+        <div class="amount-input-wrap">
+          <input type="number" class="form-input" id="input-amount"
+                 placeholder="0.00" inputmode="decimal" step="0.01" min="0">
+          <span class="currency-label" id="form-currency">ETB</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <input type="hidden" id="input-category" value="food">
+        <div class="category-grid">
+          <div class="category-option selected" data-cat="food">
+            <span class="cat-icon">🍔</span>
+            <span class="cat-name">Food</span>
+          </div>
+          <div class="category-option" data-cat="transport">
+            <span class="cat-icon">🚌</span>
+            <span class="cat-name">Transport</span>
+          </div>
+          <div class="category-option" data-cat="bills">
+            <span class="cat-icon">📄</span>
+            <span class="cat-name">Bills</span>
+          </div>
+          <div class="category-option" data-cat="other">
+            <span class="cat-icon">📦</span>
+            <span class="cat-name">Other</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Note (optional)</label>
+        <input type="text" class="form-input" id="input-note"
+               placeholder="e.g., Lunch at cafe" maxlength="100">
+      </div>
+
+      <button class="btn btn-primary" id="btn-save">Save</button>
+      <button class="btn btn-danger hidden" id="btn-delete-form">Delete Expense</button>
+    </div>
+  </div>
+
+  <!-- DETAIL VIEW -->
+  <div class="view hidden" id="detail-view">
+    <div class="detail-view">
+      <div class="detail-icon" id="detail-icon">🍔</div>
+      <div class="detail-amount" id="detail-amount">0.00 ETB</div>
+      <div class="detail-category" id="detail-category">Food</div>
+
+      <div class="detail-meta">
+        <div class="detail-row">
+          <span class="detail-row-label">Note</span>
+          <span class="detail-row-value" id="detail-note">—</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-row-label">Date</span>
+          <span class="detail-row-value" id="detail-date">—</span>
+        </div>
+      </div>
+
+      <div class="detail-actions">
+        <button class="btn btn-secondary" id="btn-edit">Edit</button>
+        <button class="btn btn-danger" id="btn-delete" style="background:var(--destructive);color:#fff">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUMMARY VIEW -->
+  <div class="view hidden" id="summary-view">
+    <div class="summary-view">
+      <h2 class="summary-header">Monthly Summary</h2>
+
+      <div class="summary-cards">
+        <div class="summary-card">
+          <div class="sc-label">Total</div>
+          <div class="sc-value" id="summary-total">0.00</div>
+        </div>
+        <div class="summary-card">
+          <div class="sc-label">Daily Avg</div>
+          <div class="sc-value" id="summary-avg">0.00</div>
+        </div>
+        <div class="summary-card">
+          <div class="sc-label">Count</div>
+          <div class="sc-value" id="summary-count">0</div>
+        </div>
+      </div>
+
+      <div class="chart-wrap">
+        <canvas id="pie-chart" width="200" height="200"></canvas>
+      </div>
+
+      <div id="category-breakdown"></div>
+    </div>
+  </div>
+
+  <!-- Footer summary -->
+  <div class="summary-footer" id="summary-footer">No expenses this month</div>
+
+  <!-- FAB for non-Telegram browsers -->
+  <button class="btn btn-primary add-fab" id="add-fab"
+          style="position:fixed;bottom:60px;right:16px;width:auto;padding:12px 20px;border-radius:24px;z-index:90;box-shadow:0 2px 12px rgba(0,0,0,0.15)">
+    + Add
+  </button>
+
+  <script src="storage.js"></script>
+  <script src="ui.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
